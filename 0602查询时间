@@ -1,0 +1,34 @@
+select
+*
+from
+(
+select
+distinct
+a.客户pin,
+a.当前会话创建时间 x,
+b.当前会话创建时间 y,
+(
+case
+when a.当前会话创建时间 = b.当前会话创建时间 then null
+when TIMESTAMPDIFF(HOUR,a.当前会话创建时间,b.当前会话创建时间) <= 24 then '24H'
+when TIMESTAMPDIFF(HOUR,a.当前会话创建时间,b.当前会话创建时间) <= 36 then '36H'
+when TIMESTAMPDIFF(HOUR,a.当前会话创建时间,b.当前会话创建时间) <= 72 then '72H'
+else null end
+) time,
+b.服务商类型,
+if(b.`服务商类型`='京东客服','Y','N') judge
+from
+`0602以前1` a,
+`0602以前1` b
+
+where
+a.客户pin = b.客户pin
+and
+a.客户pin = '-李-先生'
+
+order by
+a.客户pin,
+a.当前会话创建时间
+) c
+where
+time is not null
