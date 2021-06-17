@@ -1,0 +1,57 @@
+select
+场景,
+子场景,
+avg(平均组件调用量) 组件调用量中位数
+from
+(
+select
+场景,
+子场景,
+平均组件调用量,
+row_number() over(partition by 场景,子场景 order by 平均组件调用量) asc_d,
+row_number() over(partition by 场景,子场景 order by 平均组件调用量 desc) desc_d
+from
+(
+SELECT
+zj.`场景`,
+zj.`子场景`,
+zj.`日期`,
+ifnull(sum(zj.`组件调用量`)/会话轮数总计,0) 平均组件调用量
+
+FROM `组件参数` zj
+left join
+(
+select
+`咨询日期`,
+`场景`,
+`子场景`,
+sum(`会话轮数`) 会话轮数总计
+from
+`无人cs模型原表`
+GROUP BY
+`咨询日期`,
+`场景`,
+`子场景`
+) wr
+on wr.`咨询日期` = zj.`日期` and wr.`子场景` = zj.`子场景` and wr.`场景` = zj.`场景`
+
+where zj.`日期` between '2021-05-10' and '2021-05-15'
+
+GROUP BY
+zj.`场景`,
+zj.`子场景`,
+zj.`日期`
+
+ORDER BY
+场景,
+子场景,
+平均组件调用量
+) as t1
+) as t2
+
+where
+asc_d between desc_d-1 and desc_d+1
+
+GROUP BY
+场景,
+子场景
