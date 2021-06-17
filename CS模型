@@ -1,0 +1,212 @@
+with t as
+(
+select
+a.*,
+ifnull(c.`风险等级`,'D') 风险等级,
+c.`情绪` 情绪,
+(
+case 
+when  (a.`用户分层` like '%R用户%') or (a.`用户分层` like '%G%') then 'C1'
+when  a.`用户分层` like '%A+%' then 'C5'
+when  a.`用户分层` like '%京享值高分4%' or 
+      a.`用户分层` like '%京享值高分5%' or 
+			a.`用户分层` like '%京享值高分6%' or 
+			a.`用户分层` like '%京享值高分7%' or 
+			a.`用户分层` like '%京享值高分8%' or 
+			a.`用户分层` like '%京享值高分9%' or 
+			a.`用户分层` like '%京享值高分10%' or 
+			a.`用户分层` like '%京享值高分11%' or 
+			a.`用户分层` like '%京享值高分12%' or 
+			a.`用户分层` like '%京享值高分13%' or 
+			a.`用户分层` like '%京享值高分14%' or 
+			a.`用户分层` like '%京享值高分15%' then 'C4'
+when  (a.`用户分层` like '%plus%') or (b.`无意图转人工率` > 0.6) then 'C3'
+else 'C2' end
+) C类,
+
+(
+case 
+when  (a.`用户分层` like '%R用户%') or (a.`用户分层` like '%G%') then 'C1'
+when  a.`用户分层` like '%A+%' then 'C5'
+when  a.`用户分层` like '%京享值高分4%' or 
+      a.`用户分层` like '%京享值高分5%' or 
+			a.`用户分层` like '%京享值高分6%' or 
+			a.`用户分层` like '%京享值高分7%' or 
+			a.`用户分层` like '%京享值高分8%' or 
+			a.`用户分层` like '%京享值高分9%' or 
+			a.`用户分层` like '%京享值高分10%' or 
+			a.`用户分层` like '%京享值高分11%' or 
+			a.`用户分层` like '%京享值高分12%' or 
+			a.`用户分层` like '%京享值高分13%' or 
+			a.`用户分层` like '%京享值高分14%' or 
+			a.`用户分层` like '%京享值高分15%' then 'C4'
+when  a.`用户分层` like '%plus%' and b.`无意图转人工率`<= 0.6  then 'C3_plus'
+when  b.`无意图转人工率`> 0.6 and (a.`用户分层` not like '%plus%' or a.`用户分层` is null) then 'C3_无意图'
+when  a.`用户分层` like '%plus%' and b.`无意图转人工率`> 0.6 then 'C3_plus&无意图'
+else 'C2' end
+) C类分类
+from
+`无人cs模型原表` a
+
+-- 无意图转人工是否应该到子场景？
+left join
+(
+SELECT
+`用户pin`,
+count(*),
+sum(if(`是否无意图转人工`=1,1,0)),
+sum(if(`是否无意图转人工`=1,1,0)) / count(*) 无意图转人工率
+FROM 
+`无人cs模型战略分析`
+GROUP BY
+`用户pin`
+) b
+on
+a.`用户pin` = b.`用户pin`
+
+-- 风控等级
+left join
+`风险等级1` c
+on a.`会话id` = c.`会话id` and a.`咨询日期` = c.`咨询日期`
+)
+
+
+
+#子查询调用
+select
+t1.*,
+t2.会话轮数,
+t3.平均组件调用量
+
+from
+(
+select
+场景,
+子场景,
+风险等级,
+C类,
+C类分类,
+avg(子意图数),
+count(会话id),
+sum(if(情绪='中性',1,0)) 中性,
+sum(if(情绪='愤怒',1,0)) 愤怒,
+sum(if(情绪='焦虑',1,0)) 焦虑,
+sum(if(情绪='失落',1,0)) 失落,
+sum(if(情绪='高兴',1,0)) 高兴
+
+from
+t
+
+GROUP BY
+场景,
+子场景,
+风险等级,
+C类,
+C类分类
+)  t1
+
+left join
+(
+SELECT
+场景,
+子场景,
+avg(会话轮数) 会话轮数
+
+from
+(
+select
+场景,
+子场景,
+会话轮数,
+row_number() over(partition by 场景,子场景 order by 会话轮数) ranking,
+count(场景) over(partition by 场景,子场景) cnt
+from
+`无人cs模型原表`
+) a
+
+where
+ranking >= cnt/2 and ranking <= cnt/2 + 1
+
+group by
+场景,
+子场景
+) t2
+on t1.场景 = t2.场景 and t1.子场景 = t2.子场景
+
+left join
+(
+select
+场景,
+子场景,
+avg(ifnull(平均组件调用量,0)) 平均组件调用量
+
+from
+(
+select
+a.场景,
+a.子场景,
+t2.平均组件调用量,
+row_number() over(partition by a.场景,a.子场景 order by t2.平均组件调用量) ranking,
+count(a.场景) over(partition by a.场景,a.子场景) cnt
+
+from
+`无人cs模型原表` a
+
+left join
+(
+select
+日期,
+场景,
+子场景,
+会话轮数总计,
+平均组件调用量
+from
+
+(
+SELECT
+zj.`场景`,
+zj.`子场景`,
+zj.`日期`,
+会话轮数总计,
+ifnull(sum(zj.`组件调用量`)/会话轮数总计,0) 平均组件调用量
+
+FROM `组件参数` zj
+
+left join
+(
+select
+`咨询日期`,
+`场景`,
+`子场景`,
+sum(`会话轮数`) 会话轮数总计
+from
+`无人cs模型原表`
+GROUP BY
+`咨询日期`,
+`场景`,
+`子场景`
+) wr
+on wr.`咨询日期` = zj.`日期` and wr.`子场景` = zj.`子场景` and wr.`场景` = zj.`场景`
+
+where zj.`日期` between '2021-05-10' and '2021-05-15'
+
+GROUP BY
+zj.`场景`,
+zj.`子场景`,
+zj.`日期`
+) as t1
+) as t2
+on t2.日期 = a.咨询日期 and t2.场景 = a.场景 and t2.子场景 = a.子场景
+) t3
+
+where
+ranking >= cnt/2 and ranking <=cnt/2 + 1
+
+GROUP BY
+场景,
+子场景
+) t3
+on t1.场景 = t3.场景 and t1.子场景 = t3.子场景
+
+
+
