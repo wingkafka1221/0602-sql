@@ -1,0 +1,23 @@
+SELECT
+场景,
+子场景,
+avg(会话轮数) 会话轮数
+
+from
+(
+select
+场景,
+子场景,
+会话轮数,
+row_number() over(partition by 场景,子场景 order by 会话轮数) ranking,
+count(场景) over(partition by 场景,子场景) cnt
+from
+`无人cs模型原表`
+) a
+
+where
+ranking >= cnt/2 and ranking <= cnt/2 + 1
+
+group by
+场景,
+子场景
