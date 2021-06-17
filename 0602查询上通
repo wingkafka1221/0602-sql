@@ -1,0 +1,37 @@
+select
+客户pin,
+x 当前会话创建时间,
+y,
+'上痛' time,
+服务商类型,
+judge
+
+from
+(
+select
+distinct
+a.客户pin,
+a.当前会话创建时间 x,
+b.当前会话创建时间 y,
+b.`服务商类型`,
+if(b.`服务商类型`='京东客服','Y','N') judge, 
+TIMESTAMPDIFF(second,a.当前会话创建时间,b.当前会话创建时间) time,
+rank() over(partition by a.客户pin,a.当前会话创建时间 order by TIMESTAMPDIFF(second,a.当前会话创建时间,b.当前会话创建时间) desc) time_rank
+
+from
+`0602以前1` a,
+`0602以前1` b
+
+where
+a.客户pin = '-李-先生'
+and
+a.客户pin= b.客户pin
+and
+TIMESTAMPDIFF(second,a.当前会话创建时间,b.当前会话创建时间) < 0
+
+order by
+a.当前会话创建时间,
+b.当前会话创建时间
+) c
+where
+time_rank = 1
