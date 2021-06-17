@@ -1,0 +1,93 @@
+with t as
+(
+select
+a.*,
+ifnull(c.`风险等级`,'D') 风险等级,
+(
+case 
+when  (a.`用户分层` like '%R用户%') or (a.`用户分层` like '%G%') then 'C1'
+when  a.`用户分层` like '%A+%' then 'C5'
+when  a.`用户分层` like '%京享值高分4%' or 
+      a.`用户分层` like '%京享值高分5%' or 
+			a.`用户分层` like '%京享值高分6%' or 
+			a.`用户分层` like '%京享值高分7%' or 
+			a.`用户分层` like '%京享值高分8%' or 
+			a.`用户分层` like '%京享值高分9%' or 
+			a.`用户分层` like '%京享值高分10%' or 
+			a.`用户分层` like '%京享值高分11%' or 
+			a.`用户分层` like '%京享值高分12%' or 
+			a.`用户分层` like '%京享值高分13%' or 
+			a.`用户分层` like '%京享值高分14%' or 
+			a.`用户分层` like '%京享值高分15%' then 'C4'
+when  (a.`用户分层` like '%plus%') or (b.`无意图转人工率` > 0.6) then 'C3'
+else 'C2' end
+) C类,
+
+(
+case 
+when  (a.`用户分层` like '%R用户%') or (a.`用户分层` like '%G%') then 'C1'
+when  a.`用户分层` like '%A+%' then 'C5'
+when  a.`用户分层` like '%京享值高分4%' or 
+      a.`用户分层` like '%京享值高分5%' or 
+			a.`用户分层` like '%京享值高分6%' or 
+			a.`用户分层` like '%京享值高分7%' or 
+			a.`用户分层` like '%京享值高分8%' or 
+			a.`用户分层` like '%京享值高分9%' or 
+			a.`用户分层` like '%京享值高分10%' or 
+			a.`用户分层` like '%京享值高分11%' or 
+			a.`用户分层` like '%京享值高分12%' or 
+			a.`用户分层` like '%京享值高分13%' or 
+			a.`用户分层` like '%京享值高分14%' or 
+			a.`用户分层` like '%京享值高分15%' then 'C4'
+when  a.`用户分层` like '%plus%' and b.`无意图转人工率`<= 0.6  then 'C3_plus'
+when  b.`无意图转人工率`> 0.6 and (a.`用户分层` not like '%plus%' or  a.`用户分层` is null)then 'C3_无意图'
+when  a.`用户分层` like '%plus%' and b.`无意图转人工率`> 0.6 then 'C3_plus&无意图'
+else 'C2' end
+) C类分类
+
+from
+`无人cs模型原表` a
+
+-- 无意图转人工是否应该到子场景？
+left join
+(
+SELECT
+`用户pin`,
+count(*),
+sum(if(`是否无意图转人工`=1,1,0)),
+sum(if(`是否无意图转人工`=1,1,0)) / count(*) 无意图转人工率
+FROM 
+`无人cs模型战略分析`
+GROUP BY
+`用户pin`
+) b
+on
+a.`用户pin` = b.`用户pin`
+
+-- 风控等级
+left join
+`风险等级1` c
+on a.`会话id` = c.`会话id` and a.`咨询日期` = c.`咨询日期`
+)
+
+
+
+#子查询调用
+select
+场景,
+子场景,
+风险等级,
+C类,
+C类分类,
+avg(子意图数),
+count(会话id)
+
+from
+t
+
+GROUP BY
+场景,
+子场景,
+风险等级,
+C类,
+C类分类
